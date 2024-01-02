@@ -33,7 +33,7 @@ func (fs *FilServer) ReadLoop(conn net.Conn) {
 	for {
 		var size int64
 		binary.Read(conn, binary.LittleEndian, &size) // get the size that was written into conn
-		n, err := io.CopyN(buff, conn, 4000)          // copy bytes from conn to buff
+		n, err := io.CopyN(buff, conn, size)          // copy bytes from conn to buff
 		HandleError(err)
 		fmt.Println(buff.Bytes())
 		fmt.Printf("Received %d bytes over the netwrok\n", n)

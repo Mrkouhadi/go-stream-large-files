@@ -7,43 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/pkg/profile"
+	"strings"
 )
-
-const uploadDir = "./uploads"
-
-func main() {
-	// Profiling our program
-	defer profile.Start(profile.MemProfileRate(1), profile.MemProfile, profile.ProfilePath(".")).Stop()
-
-	// Create upload directory if not exists
-	err := os.MkdirAll(uploadDir, os.ModePerm)
-	if err != nil {
-		log.Fatalf("Failed to create upload directory: %v", err)
-	}
-
-	// Start the TCP server in a goroutine
-	server := &FilServer{}
-	go server.Start()
-
-	// Define HTTP routes
-	/*
-			<form Method="POST" action="http://localhost:8080/upload"  enctype="multipart/form-data" >
-		        <input type="file" id="file" name="file"/>
-		        <input type="submit" value="UPLOAD"/>
-		    </form>
-	*/
-	http.HandleFunc("/upload", uploadHandler)
-	http.HandleFunc("/download/", downloadHandler) // http://localhost:8080/download/uploads/FileName
-
-	// Start the HTTP server
-	port := ":8080"
-	fmt.Printf("Starting server on %s\n", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
-}
 
 // uploadHandler handles file uploads
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +42,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// Use SendFile to send the file to the TCP server with progress reporting
 	progressChan := make(chan float64)
 	go func() {
-		if err := SendFile(filePath, progressChan); err != nil {
+		if err := SendFile(filePath, progressChan, passPhrase); err != nil { // FIXME:
 			log.Printf("Failed to send file: %v", err)
 		}
 		close(progressChan)
@@ -97,13 +62,17 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // downloadHandler handles file downloads
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	fileName := filepath.Base(r.URL.Path)
+	fileName := filepath.Base(strings.TrimLeft(r.URL.Path, "/"))
 	filePath := filepath.Join(uploadDir, fileName)
 
+	fmt.Println(filePath)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
+		fmt.Println("error hapened heeere.")
+
 		return
 	}
+	fmt.Println("reached here...")
 
 	http.ServeFile(w, r, filePath)
 }

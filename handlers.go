@@ -7,20 +7,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // uploadHandler handles file uploads
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "Failed to read file", http.StatusBadRequest)
-		fmt.Println(err)
 		return
 	}
 	defer file.Close()
@@ -42,8 +35,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// Use SendFile to send the file to the TCP server with progress reporting
 	progressChan := make(chan float64)
 	go func() {
-		if err := SendFile(filePath, progressChan, passPhrase); err != nil { // FIXME:
-			log.Printf("Failed to send file: %v", err)
+		if err := SendFile(filePath, progressChan, passPhrase); err != nil {
+			http.Error(w, "Failed to send the file", http.StatusInternalServerError)
 		}
 		close(progressChan)
 	}()
@@ -61,18 +54,35 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadHandler handles file downloads
+// func downloadHandler(w http.ResponseWriter, r *http.Request) {
+// 	fileName := filepath.Base(strings.TrimLeft(r.URL.Path, "/"))
+// 	filePath := filepath.Join(uploadDir, fileName)
+// 	log.Println("file:", fileName)
+// 	log.Println("path:", filePath)
+// 	fmt.Println(filePath)
+// 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+// 		http.Error(w, "File not found", http.StatusNotFound)
+// 		return
+// 	}
+// 	http.ServeFile(w, r, filePath)
+// }
+
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	fileName := filepath.Base(strings.TrimLeft(r.URL.Path, "/"))
-	filePath := filepath.Join(uploadDir, fileName)
-
-	fmt.Println(filePath)
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		http.Error(w, "File not found", http.StatusNotFound)
-		fmt.Println("error hapened heeere.")
-
+	log.Println("downloadHandler invoked")
+	fileName := r.URL.Query().Get("file")
+	if fileName == "" {
+		log.Println("Missing 'file' query parameter")
+		http.Error(w, "Missing file parameter", http.StatusBadRequest)
 		return
 	}
-	fmt.Println("reached here...")
 
+	filePath := filepath.Join("uploadDir", fileName)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		log.Printf("File not found: %s", filePath)
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("Serving file: %s", filePath)
 	http.ServeFile(w, r, filePath)
 }
